@@ -10,14 +10,14 @@ public class NewCarController : MonoBehaviour
     [SerializeField] private WheelColliders _colliders;
     [SerializeField] private WheelMeshes _wheelMeshes;
 
-    private bool _startAcceleration;
+    private bool _startAcceleration, _startBrake, _stopAcceleration;
     private float _acceleration = 500;
     private float _motorPower = 500;
-    private float _brakePower = 50000;
+    private float _brakePower = 80000;
     private float _speed;
 
     private Rigidbody _playerRB;
-    private Sequence _mySequence;
+    private Sequence _mySequence, _mySequenceBrake;
 
     public float GasInput;
     public float BrakeInput;
@@ -42,11 +42,24 @@ public class NewCarController : MonoBehaviour
     //Tормоз
     void ApplyBrake()
     {
-        _colliders.FRWheel.brakeTorque = BrakeInput * _brakePower * 0.7f;
-        _colliders.FLWheel.brakeTorque = BrakeInput * _brakePower * 0.7f;
+        _colliders.FRWheel.brakeTorque = BrakeInput * _brakePower * 1.8f;
+        _colliders.FLWheel.brakeTorque = BrakeInput * _brakePower * 1.8f;
 
-        _colliders.RRWheel.brakeTorque = BrakeInput * _brakePower * 0.3f;
-        _colliders.RLWheel.brakeTorque = BrakeInput * _brakePower * 0.3f;
+        _colliders.RRWheel.brakeTorque = BrakeInput * _brakePower * 0.8f;
+        _colliders.RLWheel.brakeTorque = BrakeInput * _brakePower * 1.8f;
+
+        if (GasInput == 1)
+        {
+            _mySequence.Kill();
+            _startAcceleration = false;
+            _mySequenceBrake = DOTween.Sequence();
+            _mySequenceBrake.AppendCallback(() => _startBrake = true);
+            _mySequenceBrake.AppendInterval(1f);
+            _mySequenceBrake.AppendCallback(() => _playerRB.drag = 10);
+            _mySequenceBrake.AppendCallback(() => _playerRB.drag = 25);
+            _mySequenceBrake.AppendCallback(() => _startBrake = false);
+            _mySequenceBrake.Play();
+        }
     }
 
     //Мотор
@@ -56,11 +69,21 @@ public class NewCarController : MonoBehaviour
         _colliders.RLWheel.motorTorque = _motorPower * GasInput;
         if (GasInput == -1)
         {
-            _mySequence = DOTween.Sequence();
-            _mySequence.AppendInterval(3f);
-            _mySequence.AppendCallback(() => Acceleration());
+            if (!_stopAcceleration)
+            {
+                _stopAcceleration = true;
+                _playerRB.drag = 0;
+                _mySequence = DOTween.Sequence();
+                _mySequence.AppendCallback(() => _stopAcceleration = false);
+                _mySequence.AppendInterval(3f);
+                _mySequence.AppendCallback(() => Acceleration());
+            }
         }
-        else _motorPower = 500;
+        else
+        {
+            _motorPower = 500;
+            _acceleration = 500;
+        }
     }
 
     //Ускорение
@@ -68,11 +91,13 @@ public class NewCarController : MonoBehaviour
     {
         if (!_startAcceleration)
         {
+            Debug.Log("den");
             _mySequence = DOTween.Sequence();
             _mySequence.AppendCallback(() => _startAcceleration = true);
             _mySequence.AppendInterval(1f);
-            _mySequence.AppendCallback(() => _acceleration = _motorPower / 100 * 5);
-            _mySequence.AppendCallback(() => _motorPower += _acceleration);
+            _mySequence.AppendCallback(() => _acceleration += _acceleration / 100 * 10);
+            _mySequence.AppendCallback(() => Debug.Log(_acceleration));
+            _mySequence.AppendCallback(() => _playerRB.AddRelativeForce(new Vector3(0, 0, -_acceleration), ForceMode.Impulse));
             _mySequence.AppendCallback(() => _startAcceleration = false);
             _mySequence.Play();
         }
@@ -113,17 +138,19 @@ public class NewCarController : MonoBehaviour
     {
         if (coll.GetComponent<ArrowController>() != null)
         {
-            Debug.Log(transform.rotation.eulerAngles.y);
-            if (coll.GetComponent<ArrowController>().Car == ArrowController.Arrow.car)
+            if (GasInput == -1)
             {
-                if (transform.rotation.eulerAngles.y > -30 && transform.rotation.eulerAngles.y < 30)
-                    SpeedArrow(true);
-                else if(transform.rotation.eulerAngles.y > 330 && transform.rotation.eulerAngles.y < 390)
-                    SpeedArrow(true);
-                if (transform.rotation.eulerAngles.y > 180 && transform.rotation.eulerAngles.y < 220)
-                    SpeedArrow(false);
-                else if (transform.rotation.eulerAngles.y > 110 && transform.rotation.eulerAngles.y <= 180)
-                    SpeedArrow(false);
+                if (coll.GetComponent<ArrowController>().Car == ArrowController.Arrow.car)
+                {
+                    if (transform.rotation.eulerAngles.y > -30 && transform.rotation.eulerAngles.y < 30)
+                        SpeedArrow(true);
+                    else if (transform.rotation.eulerAngles.y > 330 && transform.rotation.eulerAngles.y < 390)
+                        SpeedArrow(true);
+                    if (transform.rotation.eulerAngles.y > 180 && transform.rotation.eulerAngles.y < 220)
+                        SpeedArrow(false);
+                    else if (transform.rotation.eulerAngles.y > 110 && transform.rotation.eulerAngles.y <= 180)
+                        SpeedArrow(false);
+                }
             }
         }
     }
@@ -134,14 +161,14 @@ public class NewCarController : MonoBehaviour
         if(rotation)
         {
             Debug.Log("test1");
-            _acceleration = _motorPower / 100 * 15;
+            _playerRB.AddRelativeForce(new Vector3(0, 0, -40) * (_motorPower / 100 * 15), ForceMode.Impulse);
             _motorPower += _acceleration;
         }
         else
         {
             Debug.Log("test2");
-            _acceleration = _motorPower / 100 * 15;
-            _motorPower -= _acceleration;
+            _playerRB.AddRelativeForce(new Vector3(0, 0, 40) * (_motorPower / 100 * 15), ForceMode.Impulse);
+            //_motorPower -= _acceleration;
         }
     }
 }
